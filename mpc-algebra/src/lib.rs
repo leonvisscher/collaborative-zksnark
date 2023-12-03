@@ -6,8 +6,6 @@ pub use reveal::Reveal;
 
 pub mod channel;
 
-pub mod com;
-
 pub mod share;
 pub use share::SpdzPairingShare;
 
