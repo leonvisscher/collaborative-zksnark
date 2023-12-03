@@ -19,16 +19,17 @@ use std::hash::Hash;
 use std::io::{self, Read, Write};
 use std::marker::PhantomData;
 
-use mpc_net::{MpcNet, MpcMultiNet as Net};
 use crate::channel::MpcSerNet;
+use mpc_net::{MpcMultiNet as Net, MpcNet};
 
 use super::field::{
     DenseOrSparsePolynomial, DensePolynomial, ExtFieldShare, FieldShare, SparsePolynomial,
 };
 use super::group::GroupShare;
+use super::msm::{AffineMsm, Msm, ProjectiveMsm};
+
 use super::pairing::{AffProjShare, PairingShare};
 use super::BeaverSource;
-use crate::msm::*;
 use crate::Reveal;
 
 #[derive(Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
@@ -97,23 +98,27 @@ impl<F: Field> Reveal for AdditiveFieldShare<F> {
         self.val
     }
     fn king_share<R: Rng>(f: Self::Base, rng: &mut R) -> Self {
-        let mut r: Vec<F> = (0..(Net::n_parties()-1)).map(|_| F::rand(rng)).collect();
+        let mut r: Vec<F> = (0..(Net::n_parties() - 1)).map(|_| F::rand(rng)).collect();
         let sum_r: F = r.iter().sum();
         r.push(f - sum_r);
-        Self::from_add_shared(Net::recv_from_king( if Net::am_king() { Some(r) } else { None }))
+        Self::from_add_shared(Net::recv_from_king(if Net::am_king() {
+            Some(r)
+        } else {
+            None
+        }))
     }
     fn king_share_batch<R: Rng>(f: Vec<Self::Base>, rng: &mut R) -> Vec<Self> {
-        let mut rs: Vec<Vec<Self::Base>> =
-            (0..(Net::n_parties()-1)).map(|_| {
-            (0..f.len()).map(|_| {
-                F::rand(rng)
-            }).collect()
-        }).collect();
-        let final_shares: Vec<Self::Base> = (0..rs[0].len()).map(|i| {
-            f[i] - &rs.iter().map(|r| &r[i]).sum()
-        }).collect();
+        let mut rs: Vec<Vec<Self::Base>> = (0..(Net::n_parties() - 1))
+            .map(|_| (0..f.len()).map(|_| F::rand(rng)).collect())
+            .collect();
+        let final_shares: Vec<Self::Base> = (0..rs[0].len())
+            .map(|i| f[i] - &rs.iter().map(|r| &r[i]).sum())
+            .collect();
         rs.push(final_shares);
-        Net::recv_from_king(if Net::am_king() { Some(rs) } else {None}).into_iter().map(Self::from_add_shared).collect()
+        Net::recv_from_king(if Net::am_king() { Some(rs) } else { None })
+            .into_iter()
+            .map(Self::from_add_shared)
+            .collect()
     }
 }
 
@@ -121,7 +126,9 @@ impl<F: Field> FieldShare<F> for AdditiveFieldShare<F> {
     fn batch_open(selfs: impl IntoIterator<Item = Self>) -> Vec<F> {
         let self_vec: Vec<F> = selfs.into_iter().map(|s| s.val).collect();
         let all_vals = Net::broadcast(&self_vec);
-        (0..self_vec.len()).map(|i| all_vals.iter().map(|v| &v[i]).sum()).collect()
+        (0..self_vec.len())
+            .map(|i| all_vals.iter().map(|v| &v[i]).sum())
+            .collect()
     }
     fn add(&mut self, other: &Self) -> &mut Self {
         self.val += &other.val;
@@ -194,23 +201,27 @@ impl<G: Group, M> Reveal for AdditiveGroupShare<G, M> {
         self.val
     }
     fn king_share<R: Rng>(f: Self::Base, rng: &mut R) -> Self {
-        let mut r: Vec<G> = (0..(Net::n_parties()-1)).map(|_| G::rand(rng)).collect();
+        let mut r: Vec<G> = (0..(Net::n_parties() - 1)).map(|_| G::rand(rng)).collect();
         let sum_r: G = r.iter().sum();
         r.push(f - sum_r);
-        Self::from_add_shared(Net::recv_from_king( if Net::am_king() { Some(r) } else { None }))
+        Self::from_add_shared(Net::recv_from_king(if Net::am_king() {
+            Some(r)
+        } else {
+            None
+        }))
     }
     fn king_share_batch<R: Rng>(f: Vec<Self::Base>, rng: &mut R) -> Vec<Self> {
-        let mut rs: Vec<Vec<Self::Base>> =
-            (0..(Net::n_parties()-1)).map(|_| {
-            (0..f.len()).map(|_| {
-                Self::Base::rand(rng)
-            }).collect()
-        }).collect();
-        let final_shares: Vec<Self::Base> = (0..rs[0].len()).map(|i| {
-            f[i] - &rs.iter().map(|r| &r[i]).sum()
-        }).collect();
+        let mut rs: Vec<Vec<Self::Base>> = (0..(Net::n_parties() - 1))
+            .map(|_| (0..f.len()).map(|_| Self::Base::rand(rng)).collect())
+            .collect();
+        let final_shares: Vec<Self::Base> = (0..rs[0].len())
+            .map(|i| f[i] - &rs.iter().map(|r| &r[i]).sum())
+            .collect();
         rs.push(final_shares);
-        Net::recv_from_king(if Net::am_king() { Some(rs) } else {None}).into_iter().map(Self::from_add_shared).collect()
+        Net::recv_from_king(if Net::am_king() { Some(rs) } else { None })
+            .into_iter()
+            .map(Self::from_add_shared)
+            .collect()
     }
 }
 
@@ -220,7 +231,9 @@ impl<G: Group, M: Msm<G, G::ScalarField>> GroupShare<G> for AdditiveGroupShare<G
     fn batch_open(selfs: impl IntoIterator<Item = Self>) -> Vec<G> {
         let self_vec: Vec<G> = selfs.into_iter().map(|s| s.val).collect();
         let all_vals = Net::broadcast(&self_vec);
-        (0..self_vec.len()).map(|i| all_vals.iter().map(|v| &v[i]).sum()).collect()
+        (0..self_vec.len())
+            .map(|i| all_vals.iter().map(|v| &v[i]).sum())
+            .collect()
     }
 
     fn add(&mut self, other: &Self) -> &mut Self {
@@ -434,7 +447,9 @@ impl<F: Field> FieldShare<F> for MulFieldShare<F> {
     fn batch_open(selfs: impl IntoIterator<Item = Self>) -> Vec<F> {
         let self_vec: Vec<F> = selfs.into_iter().map(|s| s.val).collect();
         let all_vals = Net::broadcast(&self_vec);
-        (0..self_vec.len()).map(|i| all_vals.iter().map(|v| &v[i]).product()).collect()
+        (0..self_vec.len())
+            .map(|i| all_vals.iter().map(|v| &v[i]).product())
+            .collect()
     }
 
     fn add(&mut self, _other: &Self) -> &mut Self {
@@ -503,9 +518,8 @@ macro_rules! groups_share {
 
         impl<E: PairingEngine> AffProjShare<E::Fr, E::$affine, E::$proj> for $struct_name<E> {
             type FrShare = AdditiveFieldShare<E::Fr>;
-            type AffineShare = AdditiveGroupShare<E::$affine, crate::msm::AffineMsm<E::$affine>>;
-            type ProjectiveShare =
-                AdditiveGroupShare<E::$proj, crate::msm::ProjectiveMsm<E::$proj>>;
+            type AffineShare = AdditiveGroupShare<E::$affine, AffineMsm<E::$affine>>;
+            type ProjectiveShare = AdditiveGroupShare<E::$proj, ProjectiveMsm<E::$proj>>;
 
             fn sh_aff_to_proj(g: Self::AffineShare) -> Self::ProjectiveShare {
                 g.map_homo(|s| s.into())
@@ -558,12 +572,10 @@ impl<E: PairingEngine> PairingShare<E> for AdditivePairingShare<E> {
     type FqeShare = AdditiveExtFieldShare<E::Fqe>;
     // Not a typo. We want a multiplicative subgroup.
     type FqkShare = MulExtFieldShare<E::Fqk>;
-    type G1AffineShare = AdditiveGroupShare<E::G1Affine, crate::msm::AffineMsm<E::G1Affine>>;
-    type G2AffineShare = AdditiveGroupShare<E::G2Affine, crate::msm::AffineMsm<E::G2Affine>>;
-    type G1ProjectiveShare =
-        AdditiveGroupShare<E::G1Projective, crate::msm::ProjectiveMsm<E::G1Projective>>;
-    type G2ProjectiveShare =
-        AdditiveGroupShare<E::G2Projective, crate::msm::ProjectiveMsm<E::G2Projective>>;
+    type G1AffineShare = AdditiveGroupShare<E::G1Affine, AffineMsm<E::G1Affine>>;
+    type G2AffineShare = AdditiveGroupShare<E::G2Affine, AffineMsm<E::G2Affine>>;
+    type G1ProjectiveShare = AdditiveGroupShare<E::G1Projective, ProjectiveMsm<E::G1Projective>>;
+    type G2ProjectiveShare = AdditiveGroupShare<E::G2Projective, ProjectiveMsm<E::G2Projective>>;
     type G1 = AdditiveG1Share<E>;
     type G2 = AdditiveG2Share<E>;
 }
