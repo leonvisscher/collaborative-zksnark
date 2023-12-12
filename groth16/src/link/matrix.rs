@@ -92,7 +92,7 @@ pub fn inner_product<PE: PairingEngine>(v: &[PE::Fr], w: &[PE::G1Affine]) -> PE:
     let mut res: PE::G1Projective = PE::G1Projective::zero();
 
     for i in 0..v.len() {
-        let tmp = w[i].mul(v[i].into_repr());
+        let tmp = w[i].scalar_mul(v[i]);
 
         res.add_assign(&tmp);
     }

@@ -101,8 +101,6 @@ impl<P: PairingEngine> SubspaceSnark for PESubspaceSnark<P> {
     }
 
     fn prove(pp: &Self::PP, ek: &Self::EK, x: &[Self::InVec]) -> Self::Proof {
-        println!("x = {:?}", x);
-
         assert_eq!(pp.t, x.len());
         inner_product::<P>(x, &ek.p)
     }
