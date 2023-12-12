@@ -39,13 +39,6 @@ merlin = "3"
 sha2 = "0.9"
 blake2 = "0.9"
 
-[[bin]]
-name = "client"
-path = "src/client.rs"
-
-[[bin]]
-name = "proof"
-path = "src/proof.rs"
 
 [profile.release]
 debug = true

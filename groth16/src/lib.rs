@@ -29,12 +29,14 @@ pub mod data_structures;
 pub mod generator;
 
 /// Create proofs for the Groth16 zkSNARK construction.
-pub mod prover;
+// pub mod prover;
 
 /// Verify proofs for the Groth16 zkSNARK construction.
 pub mod verifier;
 
 pub mod reveal;
+
+pub mod link;
 
 /// Constraints for the Groth16 verifier.
 #[cfg(feature = "r1cs")]
@@ -43,14 +45,13 @@ pub mod constraints;
 #[cfg(test)]
 mod test;
 
-pub use self::data_structures::*;
-pub use self::{generator::*, prover::*, verifier::*};
+pub use self::{data_structures::*, generator::*, verifier::*};
 
+use crate::ark_std::UniformRand;
 use ark_crypto_primitives::snark::*;
 use ark_ec::PairingEngine;
 use ark_relations::r1cs::{ConstraintSynthesizer, SynthesisError};
-use ark_std::rand::RngCore;
-use ark_std::{marker::PhantomData, vec::Vec};
+use ark_std::{marker::PhantomData, rand::RngCore, vec::Vec};
 
 /// The SNARK of [[Groth16]](https://eprint.iacr.org/2016/260.pdf).
 pub struct Groth16<E: PairingEngine> {
@@ -68,7 +69,11 @@ impl<E: PairingEngine> SNARK<E::Fr> for Groth16<E> {
         circuit: C,
         rng: &mut R,
     ) -> Result<(Self::ProvingKey, Self::VerifyingKey), Self::Error> {
-        let pk = generate_random_parameters::<E, C, R>(circuit, rng)?;
+        let pedersen_bases: &[<E as PairingEngine>::G1Affine] = &(0..3)
+            .map(|_| E::G1Affine::rand(rng).into())
+            .collect::<Vec<_>>();
+
+        let pk = generate_random_parameters::<E, C, R>(circuit, pedersen_bases, rng)?;
         let vk = pk.vk.clone();
 
         Ok((pk, vk))
@@ -79,7 +84,8 @@ impl<E: PairingEngine> SNARK<E::Fr> for Groth16<E> {
         circuit: C,
         rng: &mut R,
     ) -> Result<Self::Proof, Self::Error> {
-        create_random_proof::<E, _, _>(circuit, pk, rng)
+        // create_random_proof::<E, _, _>(circuit, pk, rng)
+        unimplemented!()
     }
 
     fn process_vk(

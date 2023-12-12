@@ -2,30 +2,31 @@
 use ark_ec::PairingEngine;
 use mpc_algebra::*;
 
+use crate::link::{EK, PP, VK};
+
 use super::*;
 
-impl<E: PairingEngine, S: PairingShare<E>> Reveal
-    for Proof<MpcPairingEngine<E, S>>
-{
+impl<E: PairingEngine, S: PairingShare<E>> Reveal for Proof<MpcPairingEngine<E, S>> {
     type Base = Proof<E>;
-    struct_reveal_simp_impl!(Proof; a, b, c);
+    struct_reveal_simp_impl!(Proof; a, b, c, d, link_d, link_pi);
 }
 
-impl<E: PairingEngine, S: PairingShare<E>> Reveal
-    for VerifyingKey<MpcPairingEngine<E, S>>
-{
+impl<E: PairingEngine, S: PairingShare<E>> Reveal for VerifyingKey<MpcPairingEngine<E, S>> {
     type Base = VerifyingKey<E>;
     struct_reveal_simp_impl!(VerifyingKey;
-    alpha_g1,
-    beta_g2,
-    gamma_g2,
-    delta_g2,
-    gamma_abc_g1);
+        alpha_g1,
+        beta_g2,
+        gamma_g2,
+        delta_g2,
+        gamma_abc_g1,
+        eta_gamma_inv_g1,
+        link_bases,
+        link_pp,
+        link_vk
+    );
 }
 
-impl<E: PairingEngine, S: PairingShare<E>> Reveal
-    for PreparedVerifyingKey<MpcPairingEngine<E, S>>
-{
+impl<E: PairingEngine, S: PairingShare<E>> Reveal for PreparedVerifyingKey<MpcPairingEngine<E, S>> {
     type Base = PreparedVerifyingKey<E>;
     struct_reveal_simp_impl!(PreparedVerifyingKey;
     vk,
@@ -34,17 +35,33 @@ impl<E: PairingEngine, S: PairingShare<E>> Reveal
     delta_g2_neg_pc);
 }
 
-impl<E: PairingEngine, S: PairingShare<E>> Reveal
-    for ProvingKey<MpcPairingEngine<E, S>>
-{
+impl<E: PairingEngine, S: PairingShare<E>> Reveal for EK<MpcPairingEngine<E, S>> {
+    type Base = EK<E>;
+    struct_reveal_simp_impl!(EK; p);
+}
+
+impl<E: PairingEngine, S: PairingShare<E>> Reveal for VK<MpcPairingEngine<E, S>> {
+    type Base = VK<E>;
+    struct_reveal_simp_impl!(VK; c, a);
+}
+
+impl<E: PairingEngine, S: PairingShare<E>> Reveal for PP<MpcPairingEngine<E, S>> {
+    type Base = PP<E>;
+    struct_reveal_simp_impl!(PP; l, t, g1, g2);
+}
+
+impl<E: PairingEngine, S: PairingShare<E>> Reveal for ProvingKey<MpcPairingEngine<E, S>> {
     type Base = ProvingKey<E>;
     struct_reveal_simp_impl!(ProvingKey;
-    vk,
-    beta_g1,
-    delta_g1,
-    a_query,
-    b_g1_query,
-    b_g2_query,
-    h_query,
-    l_query);
+        vk,
+        beta_g1,
+        delta_g1,
+        a_query,
+        b_g1_query,
+        b_g2_query,
+        h_query,
+        l_query,
+        eta_delta_inv_g1,
+        link_ek
+    );
 }

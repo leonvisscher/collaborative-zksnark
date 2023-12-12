@@ -11,8 +11,16 @@ pub mod r1cs_to_qap;
 pub fn mpc_test_prove_and_verify<E: PairingEngine, S: PairingShare<E>>(n_iters: usize) {
     let rng = &mut test_rng();
 
-    let params =
-        generate_random_parameters::<E, _, _>(MySillyCircuit { a: None, b: None }, rng).unwrap();
+    let pedersen_bases: &[<E as PairingEngine>::G1Affine] = &(0..3)
+        .map(|_| E::G1Affine::rand(rng).into())
+        .collect::<Vec<_>>();
+
+    let params = generate_random_parameters::<E, _, _>(
+        MySillyCircuit { a: None, b: None },
+        pedersen_bases,
+        rng,
+    )
+    .unwrap();
 
     let pvk = prepare_verifying_key::<E>(&params.vk);
     let mpc_params = ProvingKey::from_public(params);

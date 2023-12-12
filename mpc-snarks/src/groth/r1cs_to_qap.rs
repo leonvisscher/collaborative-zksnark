@@ -1,6 +1,6 @@
 use ark_ff::{One, PrimeField, Zero};
 use ark_poly::EvaluationDomain;
-use ark_std::{cfg_iter, cfg_iter_mut, vec, start_timer, end_timer};
+use ark_std::{cfg_iter, cfg_iter_mut, end_timer, start_timer, vec};
 
 use ark_relations::r1cs::{ConstraintSystemRef, Result as R1CSResult, SynthesisError};
 use core::ops::{AddAssign, Deref};
@@ -59,6 +59,8 @@ impl R1CStoQAP {
             prover.witness_assignment.as_slice(),
         ]
         .concat();
+
+        println!("full_assignment: {:?}", full_assignment);
 
         let domain =
             D::new(num_constraints + num_inputs).ok_or(SynthesisError::PolynomialDegreeTooLarge)?;

@@ -21,7 +21,7 @@ use std::ops::*;
 use super::super::share::field::FieldShare;
 use super::super::share::BeaverSource;
 use crate::Reveal;
-use mpc_net::{MpcNet, MpcMultiNet as Net};
+use mpc_net::{MpcMultiNet as Net, MpcNet};
 
 #[derive(Clone, Copy, Hash, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum MpcField<F: Field, S: FieldShare<F>> {
@@ -42,36 +42,16 @@ impl<T: Field, S: FieldShare<T>> BeaverSource<S, S, S> for DummyFieldTripleSourc
     #[inline]
     fn triple(&mut self) -> (S, S, S) {
         (
-            S::from_add_shared(if Net::am_king() {
-                T::one()
-            } else {
-                T::zero()
-            }),
-            S::from_add_shared(if Net::am_king() {
-                T::one()
-            } else {
-                T::zero()
-            }),
-            S::from_add_shared(if Net::am_king() {
-                T::one()
-            } else {
-                T::zero()
-            }),
+            S::from_add_shared(if Net::am_king() { T::one() } else { T::zero() }),
+            S::from_add_shared(if Net::am_king() { T::one() } else { T::zero() }),
+            S::from_add_shared(if Net::am_king() { T::one() } else { T::zero() }),
         )
     }
     #[inline]
     fn inv_pair(&mut self) -> (S, S) {
         (
-            S::from_add_shared(if Net::am_king() {
-                T::one()
-            } else {
-                T::zero()
-            }),
-            S::from_add_shared(if Net::am_king() {
-                T::one()
-            } else {
-                T::zero()
-            }),
+            S::from_add_shared(if Net::am_king() { T::one() } else { T::zero() }),
+            S::from_add_shared(if Net::am_king() { T::one() } else { T::zero() }),
         )
     }
 }
@@ -180,42 +160,10 @@ impl<'a, T: Field, S: FieldShare<T>> DivAssign<&'a MpcField<T, S>> for MpcField<
     }
 }
 
-impl_ref_ops!(
-    Mul,
-    MulAssign,
-    mul,
-    mul_assign,
-    Field,
-    FieldShare,
-    MpcField
-);
-impl_ref_ops!(
-    Add,
-    AddAssign,
-    add,
-    add_assign,
-    Field,
-    FieldShare,
-    MpcField
-);
-impl_ref_ops!(
-    Div,
-    DivAssign,
-    div,
-    div_assign,
-    Field,
-    FieldShare,
-    MpcField
-);
-impl_ref_ops!(
-    Sub,
-    SubAssign,
-    sub,
-    sub_assign,
-    Field,
-    FieldShare,
-    MpcField
-);
+impl_ref_ops!(Mul, MulAssign, mul, mul_assign, Field, FieldShare, MpcField);
+impl_ref_ops!(Add, AddAssign, add, add_assign, Field, FieldShare, MpcField);
+impl_ref_ops!(Div, DivAssign, div, div_assign, Field, FieldShare, MpcField);
+impl_ref_ops!(Sub, SubAssign, sub, sub_assign, Field, FieldShare, MpcField);
 
 impl<T: Field, S: FieldShare<T>> MpcWire for MpcField<T, S> {
     #[inline]
@@ -277,7 +225,10 @@ impl<T: Field, S: FieldShare<T>> Reveal for MpcField<T, S> {
     }
     #[inline]
     fn king_share_batch<R: Rng>(f: Vec<Self::Base>, rng: &mut R) -> Vec<Self> {
-        S::king_share_batch(f, rng).into_iter().map(Self::Shared).collect()
+        S::king_share_batch(f, rng)
+            .into_iter()
+            .map(Self::Shared)
+            .collect()
     }
     fn init_protocol() {
         S::init_protocol()
@@ -465,24 +416,44 @@ impl<F: PrimeField, S: FieldShare<F>> Field for MpcField<F, S> {
     )> {
         use poly_stub::DenseOrSparsePolynomial::*;
         let shared_num = match num {
-            DPolynomial(d) => Ok(d.into_owned().coeffs.into_iter().map(|c| match c {
-                MpcField::Shared(s) => s,
-                MpcField::Public(_) => panic!("public numerator"),
-            }).collect()),
-            SPolynomial(d) => Err(d.into_owned().coeffs.into_iter().map(|(i, c)| match c {
-                MpcField::Shared(s) => (i, s),
-                MpcField::Public(_) => panic!("public numerator"),
-            }).collect()),
+            DPolynomial(d) => Ok(d
+                .into_owned()
+                .coeffs
+                .into_iter()
+                .map(|c| match c {
+                    MpcField::Shared(s) => s,
+                    MpcField::Public(_) => panic!("public numerator"),
+                })
+                .collect()),
+            SPolynomial(d) => Err(d
+                .into_owned()
+                .coeffs
+                .into_iter()
+                .map(|(i, c)| match c {
+                    MpcField::Shared(s) => (i, s),
+                    MpcField::Public(_) => panic!("public numerator"),
+                })
+                .collect()),
         };
         let pub_denom = match den {
-            DPolynomial(d) => Ok(d.into_owned().coeffs.into_iter().map(|c| match c {
-                MpcField::Public(s) => s,
-                MpcField::Shared(_) => panic!("shared denominator"),
-            }).collect()),
-            SPolynomial(d) => Err(d.into_owned().coeffs.into_iter().map(|(i, c)| match c {
-                MpcField::Public(s) => (i, s),
-                MpcField::Shared(_) => panic!("shared denominator"),
-            }).collect()),
+            DPolynomial(d) => Ok(d
+                .into_owned()
+                .coeffs
+                .into_iter()
+                .map(|c| match c {
+                    MpcField::Public(s) => s,
+                    MpcField::Shared(_) => panic!("shared denominator"),
+                })
+                .collect()),
+            SPolynomial(d) => Err(d
+                .into_owned()
+                .coeffs
+                .into_iter()
+                .map(|(i, c)| match c {
+                    MpcField::Public(s) => (i, s),
+                    MpcField::Shared(_) => panic!("shared denominator"),
+                })
+                .collect()),
         };
         S::univariate_div_qr(shared_num, pub_denom).map(|(q, r)| {
             (

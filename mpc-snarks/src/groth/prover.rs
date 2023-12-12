@@ -1,12 +1,15 @@
 #![allow(dead_code)]
-use ark_ec::{AffineCurve, PairingEngine, ProjectiveCurve};
-use ark_ff::{Field, UniformRand, Zero};
 use super::r1cs_to_qap::R1CStoQAP;
+
+use ark_ec::{AffineCurve, PairingEngine, ProjectiveCurve};
+use ark_ff::{Field, PrimeField, UniformRand, Zero};
+use ark_groth16::link::{PESubspaceSnark, SubspaceSnark};
 use ark_groth16::{Proof, ProvingKey, VerifyingKey};
 use ark_poly::GeneralEvaluationDomain;
 use ark_relations::r1cs::{
     ConstraintSynthesizer, ConstraintSystem, OptimizationGoal, Result as R1CSResult,
 };
+use ark_std::cfg_iter;
 use ark_std::rand::Rng;
 use ark_std::{end_timer, start_timer, vec::Vec};
 use log::debug;
@@ -40,25 +43,12 @@ where
     let t = start_timer!(|| "zk sampling");
     let r = <E as PairingEngine>::Fr::rand(rng);
     let s = <E as PairingEngine>::Fr::rand(rng);
+    let v = <E as PairingEngine>::Fr::rand(rng);
+    let link_v = <E as PairingEngine>::Fr::rand(rng);
+
     end_timer!(t);
 
-    create_proof::<E, C>(circuit, pk, r, s)
-}
-
-/// Create a Groth16 proof that is *not* zero-knowledge.
-#[inline]
-pub fn create_proof_no_zk<E, C>(circuit: C, pk: &ProvingKey<E>) -> R1CSResult<Proof<E>>
-where
-    E: PairingEngine,
-    //E::Fr: BatchProd,
-    C: ConstraintSynthesizer<<E as PairingEngine>::Fr>,
-{
-    create_proof::<E, C>(
-        circuit,
-        pk,
-        <E as PairingEngine>::Fr::zero(),
-        <E as PairingEngine>::Fr::zero(),
-    )
+    create_proof::<E, C>(circuit, pk, r, s, v, link_v)
 }
 
 /// Create a Groth16 proof using randomness `r` and `s`.
@@ -68,6 +58,8 @@ pub fn create_proof<E, C>(
     pk: &ProvingKey<E>,
     r: <E as PairingEngine>::Fr,
     s: <E as PairingEngine>::Fr,
+    v: <E as PairingEngine>::Fr,
+    link_v: <E as PairingEngine>::Fr,
 ) -> R1CSResult<Proof<E>>
 where
     E: PairingEngine,
@@ -80,6 +72,11 @@ where
 
     let prover_time = start_timer!(|| "Groth16::Prover");
     let cs = ConstraintSystem::new_ref();
+
+    println!(
+        "instance_assignmentinstance_assignment: {:?}",
+        cs.borrow().unwrap().instance_assignment
+    );
 
     // Set the optimization goal
     cs.set_optimization_goal(OptimizationGoal::Constraints);
@@ -103,22 +100,43 @@ where
     let c_acc_time = start_timer!(|| "Compute C");
     let h_acc = <<E as PairingEngine>::G1Affine as AffineCurve>::multi_scalar_mul(&pk.h_query, &h);
     debug!("h_acc: {}", h_acc);
+
     // Compute C
     let prover = cs.borrow().unwrap();
-    let l_aux_acc = <<E as PairingEngine>::G1Affine as AffineCurve>::multi_scalar_mul(&pk.l_query, &prover.witness_assignment);
+    let aux_assignment = prover.witness_assignment.clone();
 
-    let r_s_delta_g1 = pk
-        .delta_g1
-        .into_projective()
-        .scalar_mul(&r)
-        .scalar_mul(&s);
+    let l_aux_acc = <<E as PairingEngine>::G1Affine as AffineCurve>::multi_scalar_mul(
+        &pk.l_query,
+        &aux_assignment[..],
+    );
+
+    let r_s_delta_g1 = pk.delta_g1.into_projective().scalar_mul(&r).scalar_mul(&s);
     debug!("r_s_delta_g1: {}", r_s_delta_g1);
+
+    let v_eta_delta_inv = pk.eta_delta_inv_g1.into_projective().scalar_mul(&v);
 
     end_timer!(c_acc_time);
 
-    let assignment: Vec<<E as PairingEngine>::Fr> = prover.instance_assignment[1..].iter().chain(prover.witness_assignment.iter()).cloned().collect();
+    let num_inputs = prover.instance_assignment.len();
+
+    println!("num_inputs: {:?}", num_inputs);
+
+    let input_assignment_with_one = prover.instance_assignment.clone();
+
+    println!("input_assignment_with_one: {:?}", input_assignment_with_one);
+
+    let input_assignment = input_assignment_with_one[1..].to_vec();
+
+    println!("input_assignment: {:?}", input_assignment);
+
     drop(prover);
     drop(cs);
+
+    let assignment = [&input_assignment[..], &aux_assignment[..]].concat();
+
+    println!("assignment length: {:?}", assignment.len());
+
+    drop(aux_assignment);
 
     // Compute A
     let a_acc_time = start_timer!(|| "Compute A");
@@ -137,17 +155,12 @@ where
     end_timer!(a_acc_time);
 
     // Compute B in G1 if needed
-//    let g1_b = if !r.is_zero() {
-        let b_g1_acc_time = start_timer!(|| "Compute B in G1");
-        let s_g1 = pk.delta_g1.scalar_mul(s);
-        let g1_b = calculate_coeff(s_g1, &pk.b_g1_query, pk.beta_g1, &assignment);
+    //    let g1_b = if !r.is_zero() {
+    let b_g1_acc_time = start_timer!(|| "Compute B in G1");
+    let s_g1 = pk.delta_g1.scalar_mul(s);
+    let g1_b = calculate_coeff(s_g1, &pk.b_g1_query, pk.beta_g1, &assignment);
 
-        end_timer!(b_g1_acc_time);
-//
-//        g1_b
-//    } else {
-//        <E as PairingEngine>::G1Projective::zero()
-//    };
+    end_timer!(b_g1_acc_time);
 
     // Compute B in G2
     let b_g2_acc_time = start_timer!(|| "Compute B in G2");
@@ -155,7 +168,7 @@ where
     let g2_b = calculate_coeff(s_g2, &pk.b_g2_query, pk.vk.beta_g2, &assignment);
     let r_g1_b = g1_b.scalar_mul(&r);
     debug!("r_g1_b: {}", r_g1_b);
-    drop(assignment);
+    // drop(assignment);
 
     end_timer!(b_g2_acc_time);
 
@@ -165,7 +178,73 @@ where
     g_c -= &r_s_delta_g1;
     g_c += &l_aux_acc;
     g_c += &h_acc;
+
+    // LegoGro16 addition
+    g_c -= &v_eta_delta_inv;
+
     end_timer!(c_time);
+
+    // ########################################
+    // # LegoGro16 additions
+    // ########################################
+
+    // Compute D
+
+    let d_acc_time = start_timer!(|| "Compute D");
+    let gamma_abc_inputs_source = &pk.vk.gamma_abc_g1;
+
+    let gamma_abc_inputs_acc =
+        <E as PairingEngine>::G1Affine::multi_scalar_mul(gamma_abc_inputs_source, &assignment);
+
+    let v_eta_gamma_inv = pk.vk.eta_gamma_inv_g1.scalar_mul(v);
+
+    let mut g_d = gamma_abc_inputs_acc;
+    g_d += &v_eta_gamma_inv;
+    end_timer!(d_acc_time);
+
+    let input_assignment_with_one_with_link_hider: Vec<E::Fr> =
+        [&input_assignment_with_one, &[link_v][..]].concat();
+
+    println!(
+        "input_assignment_with_one_with_link_hider len: {:?}",
+        input_assignment_with_one_with_link_hider.len()
+    );
+
+    let input_assignment_with_one_with_hiders: Vec<E::Fr> =
+        [&input_assignment_with_one_with_link_hider, &[v][..]].concat();
+
+    println!(
+        "input_assignment_with_one_with_hiders len: {:?}",
+        input_assignment_with_one_with_hiders.len()
+    );
+
+    let link_time = start_timer!(|| "Compute CP_{link}");
+
+    let link_pi = PESubspaceSnark::<E>::prove(
+        &pk.vk.link_pp,
+        &pk.link_ek,
+        &input_assignment_with_one_with_hiders,
+    );
+
+    println!("link_pi: {:?}", link_pi);
+
+    let pedersen_bases_affine = &pk.vk.link_bases;
+    let pedersen_values = input_assignment_with_one_with_link_hider
+        .into_iter()
+        .map(|v| v)
+        .collect::<Vec<_>>();
+
+    let g_d_link = <<E as PairingEngine>::G1Affine as AffineCurve>::multi_scalar_mul(
+        pedersen_bases_affine,
+        &pedersen_values,
+    );
+
+    end_timer!(link_time);
+
+    // ########################################
+    // # LegoGro16 additions
+    // ########################################
+
     end_timer!(prover_crypto_time);
 
     end_timer!(prover_time);
@@ -174,44 +253,51 @@ where
         a: g_a.into_affine(),
         b: g2_b.into_affine(),
         c: g_c.into_affine(),
+
+        d: g_d.into_affine(),
+        link_d: g_d_link.into_affine(),
+        link_pi,
     })
 }
 
-/// Given a Groth16 proof, returns a fresh proof of the same statement. For a proof π of a
-/// statement S, the output of the non-deterministic procedure `rerandomize_proof(π)` is
-/// statistically indistinguishable from a fresh honest proof of S. For more info, see theorem 3 of
-/// [\[BKSV20\]](https://eprint.iacr.org/2020/811)
-pub fn rerandomize_proof<E, R>(rng: &mut R, vk: &VerifyingKey<E>, proof: &Proof<E>) -> Proof<E>
-where
-    E: PairingEngine,
-    R: Rng,
-{
-    // These are our rerandomization factors. They must be nonzero and uniformly sampled.
-    let (mut r1, mut r2) = (
-        <E as PairingEngine>::Fr::zero(),
-        <E as PairingEngine>::Fr::zero(),
-    );
-    while r1.is_zero() || r2.is_zero() {
-        r1 = <E as PairingEngine>::Fr::rand(rng);
-        r2 = <E as PairingEngine>::Fr::rand(rng);
-    }
+// /// Given a Groth16 proof, returns a fresh proof of the same statement. For a proof π of a
+// /// statement S, the output of the non-deterministic procedure `rerandomize_proof(π)` is
+// /// statistically indistinguishable from a fresh honest proof of S. For more info, see theorem 3 of
+// /// [\[BKSV20\]](https://eprint.iacr.org/2020/811)
+// pub fn rerandomize_proof<E, R>(rng: &mut R, vk: &VerifyingKey<E>, proof: &Proof<E>) -> Proof<E>
+// where
+//     E: PairingEngine,
+//     R: Rng,
+// {
+//     // These are our rerandomization factors. They must be nonzero and uniformly sampled.
+//     let (mut r1, mut r2) = (
+//         <E as PairingEngine>::Fr::zero(),
+//         <E as PairingEngine>::Fr::zero(),
+//     );
+//     while r1.is_zero() || r2.is_zero() {
+//         r1 = <E as PairingEngine>::Fr::rand(rng);
+//         r2 = <E as PairingEngine>::Fr::rand(rng);
+//     }
 
-    // See figure 1 in the paper referenced above:
-    //   A' = (1/r₁)A
-    //   B' = r₁B + r₁r₂(δG₂)
-    //   C' = C + r₂A
+//     // See figure 1 in the paper referenced above:
+//     //   A' = (1/r₁)A
+//     //   B' = r₁B + r₁r₂(δG₂)
+//     //   C' = C + r₂A
 
-    // We can unwrap() this because r₁ is guaranteed to be nonzero
-    let new_a = proof.a.scalar_mul(r1.inverse().unwrap());
-    let new_b = proof.b.scalar_mul(r1) + &vk.delta_g2.scalar_mul(r1 * &r2);
-    let new_c = proof.c + proof.a.scalar_mul(r2).into_affine();
+//     // We can unwrap() this because r₁ is guaranteed to be nonzero
+//     let new_a = proof.a.scalar_mul(r1.inverse().unwrap());
+//     let new_b = proof.b.scalar_mul(r1) + &vk.delta_g2.scalar_mul(r1 * &r2);
+//     let new_c = proof.c + proof.a.scalar_mul(r2).into_affine();
 
-    Proof {
-        a: new_a.into_affine(),
-        b: new_b.into_affine(),
-        c: new_c,
-    }
-}
+//     Proof {
+//         a: new_a.into_affine(),
+//         b: new_b.into_affine(),
+//         c: new_c,
+//         d: proof.d,
+//         link_d: proof.link_d,
+//         link_pi: proof.link_pi,
+//     }
+// }
 
 fn calculate_coeff<G: AffineCurve>(
     initial: G::Projective,
