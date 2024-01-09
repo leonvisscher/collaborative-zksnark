@@ -47,5 +47,9 @@ path = "src/client.rs"
 name = "proof"
 path = "src/proof.rs"
 
+[[bin]]
+name = "cp"
+path = "src/cp/main.rs"
+
 [profile.release]
 debug = true
