@@ -8,3 +8,6 @@ mod tests {
 
 pub mod groth;
 pub mod silly;
+
+mod cp;
+mod subspace_snark_tests;

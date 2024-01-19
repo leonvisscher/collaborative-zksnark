@@ -7,7 +7,7 @@ PROCS=()
 pid=$!
 PROCS+=($pid)
 
-./target/debug/cp --party 1 3 7 30 &
+./target/debug/cp --party 1 3 7 30 > /dev/null 2>&1 &
 pid=$
 PROCS+=($pid)
 
