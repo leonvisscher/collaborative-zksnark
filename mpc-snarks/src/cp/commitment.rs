@@ -29,7 +29,6 @@ pub fn test_collaborative_commitment<E: PairingEngine>() {
         .map(|i| MpcField::<Fr>::from_add_shared(Fr::from(*i)))
         .collect::<Vec<_>>();
 
-    // TODO: Fix the values for all parties
     let pedersen_bases = vec![
         MpcField::<Fr>::from_public(Fr::from(1u64)),
         MpcField::<Fr>::from_public(Fr::from(2u64)),
