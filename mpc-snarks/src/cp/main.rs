@@ -32,8 +32,8 @@ fn main() {
 
     // test_mpc_groth16();
     // test_collaborative_mul();
-    // test_collaborative_link::<E>();
-    test_collaborative_commitment::<E>();
+    test_collaborative_link();
+    // test_collaborative_commitment::<E>();
 }
 
 // Add test for generating Pedersen commitments
