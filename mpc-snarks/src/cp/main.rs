@@ -3,15 +3,15 @@ pub mod commitment;
 pub mod link;
 pub mod multiply;
 pub mod test_groth;
-pub mod test_lego;
+// pub mod test_lego;
 pub mod test_link;
 
 use crate::test_groth::test_groth;
 use crate::test_lego::test_lego;
 use crate::test_link::test_link;
-use ark_bls12_377::Parameters;
+use ark_bls12_377::{Bls12_377, Parameters};
 use ark_ec::bls12::Bls12;
-use mpc_algebra::SpdzPairingShare;
+use mpc_algebra::{MpcPairingEngine, SpdzPairingShare};
 use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
@@ -27,11 +27,11 @@ struct Opt {
 }
 
 fn main() {
-    type E = Bls12<Parameters>;
+    type E = Bls12_377;
     type S = SpdzPairingShare<E>;
 
     // test_groth();
-    test_link();
+    test_link::<Bls12_377, MpcPairingEngine<E, S>>();
     // test_lego();
 }
 
