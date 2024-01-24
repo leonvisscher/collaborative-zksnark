@@ -15,7 +15,7 @@ use crate::link::{
     verifier::{prepare_verifying_key, verify_proof},
 };
 
-pub fn test_collaborative_link() {
+pub fn test_link() {
     let opt = Opt::from_args();
     let party_id = opt.party;
 

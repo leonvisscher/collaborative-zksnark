@@ -1,14 +1,14 @@
 pub mod circuit;
 pub mod commitment;
-pub mod cp_link;
-pub mod groth16;
 pub mod link;
 pub mod multiply;
+pub mod test_groth;
+pub mod test_lego;
+pub mod test_link;
 
-use crate::commitment::test_collaborative_commitment;
-use crate::cp_link::test_collaborative_link;
-use crate::groth16::test_mpc_groth16;
-use crate::multiply::test_collaborative_mul;
+use crate::test_groth::test_groth;
+use crate::test_lego::test_lego;
+use crate::test_link::test_link;
 use ark_bls12_377::Parameters;
 use ark_ec::bls12::Bls12;
 use mpc_algebra::SpdzPairingShare;
@@ -30,10 +30,9 @@ fn main() {
     type E = Bls12<Parameters>;
     type S = SpdzPairingShare<E>;
 
-    // test_mpc_groth16();
-    // test_collaborative_mul();
-    test_collaborative_link();
-    // test_collaborative_commitment::<E>();
+    // test_groth();
+    test_link();
+    // test_lego();
 }
 
 // Add test for generating Pedersen commitments

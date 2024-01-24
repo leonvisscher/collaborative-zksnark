@@ -10,7 +10,7 @@ use mpc_net::{MpcMultiNet, MpcNet};
 use mpc_snarks::groth::prover::create_random_proof;
 use structopt::StructOpt;
 
-pub fn test_mpc_groth16() {
+pub fn test_groth() {
     let opt = Opt::from_args();
     let party_id = opt.party;
 
